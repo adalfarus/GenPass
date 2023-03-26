@@ -58,12 +58,10 @@ def inputAndValidateMasterPassword():
 		return None
 
 	return [mp,result[1]]
-    
-		res = inputAndValidateMasterPassword()
-		if res is not None: # If its the mp or True
-    
-    
-    
+	res = inputAndValidateMasterPassword()
+	if res is not None: # If its the mp or True
+            pass
+
 def unlock_database_wrapper():
     master_password = get_master_password()
     decrypt_all_data("passwords.db")#, master_password)
@@ -92,7 +90,7 @@ def crypt_wrapper():
     }
     
     while True:
-        action = input("0:AES\n1:Hash\n2:Caeser cipher\n3:VigenÃ¨re cipher\n4:Back\n->")
+        action = input("0:AES\n1:Hash\n2:Caeser cipher\n3:Vigenère cipher\n4:Back\n->")
         if action in options:
             options[action]()
             break

@@ -1,0 +1,4 @@
+pycryptodome==3.17
+pyperclip==1.8.2
+rich==13.3.2
+py -m  pipreqs.pipreqs C:/Users/Till/Desktop/Gen4Pass5/src/textv/

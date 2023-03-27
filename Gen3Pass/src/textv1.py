@@ -1,16 +1,7 @@
-#from utils.db import check
-#from utils.db import check_database
-#from utils.db import check_database_integrity
-#from utils.db import is_database_locked
-#from utils.db import create_database
-##from utils.db import encrypt_all_data
-##from utils.db import decrypt_all_data
-##from utils.db import make_key
-#from utils.pass_gen import pg_main
-#from utils.crypt import generate_hash
-#from utils.crypt import caesar_cipher
-#from utils.crypt import vigenere_cipher
-#from utils.pass_man import pm_main
+﻿from Crypto.Protocol.KDF import HKDF
+from Crypto.Hash import SHA256
+from Crypto.Cipher import ChaCha20_Poly1305
+from Crypto.Random import get_random_bytes
 from getpass import getpass
 import random
 import string
@@ -20,65 +11,142 @@ import os
 
 def main():
     while True:
-        action = input("0:Password Generation\n1:Password Manager\n2:Crypt\n3:Settings\n4:Exit\n->")
+        action = input("0:Password Generation\n1:Password Manager\n2:Crypt\n3:Settings & Info\n4:Exit\n->")
         if action == '0':
-            action = input("0: Choose own Characters\n1: Choose Character Types\n2: With a sentence\n->")
-            if action == '0':
-                password_length = int(input("Length: "))
-                extra_char = input("Type in your extra Character/s, spaces are counted as Character/s too: ")
-                letters, digits, specialchar, deduct_symbols = '', '', ''
-                print(generate_password(password_length, deduct_symbols, letters, digits, specialchar, extra_char))
-            elif action == '1':
-                password_length = int(input("Length: "))
-                action_list = input("Enter character types you want to use, separate with dots ((A)Alphabet.(D)Digits.(SC)Special Characters.(ALL)All): ").split(".")
-                letters = string.ascii_letters if "A" in action_list else ''
-                digits = string.digits if "D" in action_list else ''
-                special_char = string.punctuation if "SC" in action_list else ''
-                if "ALL" in action_list:
-                    letters, digits, specialchar = string.ascii_letters, string.digits, string.punctuation
-                extra_char = input("Type in your extra Character/s, spaces are counted as Character/s too: ")
-                deduct_symbols = input("Deduct Symbol(s): ")
-                print(generate_password(password_length, deduct_symbols, letters, digits, special_char, extra_char))
-            elif action == '2':
-                words = input("Sentence: ").split(' ')
-                char_position, random_case, extra_char, num_length, special_chars_length = 'random', False, '', 0, 0
-                word_chars = [(word[min(char_position, len(word) - 1)] if char_position != 'random' else random.choice(word)) for word in words]
-                if random_case:
-                    word_chars = [char.lower() if random.random() < 0.5 else char.upper() for char in word_chars]
-                num_string = ''.join(random.choices(string.digits, k=num_length))
-                special_chars_string = ''.join(random.choices(string.punctuation, k=special_chars_length))
-                print(''.join(word_chars) + extra_char + num_string + special_chars_string)
-            else:
-                print("Invalid choice. Please try again.")
+            while True:
+                action = input("0: Choose own Characters\n1: Choose Character Types\n2: With a sentence\n3: Back\n->")
+                if action == '0':
+                    password_length = int(input("Length: "))
+                    extra_char = input("Type in your extra Character/s, spaces are counted as Character/s too: ")
+                    letters, digits, specialchar, deduct_symbols = '', '', ''
+                    print(generate_password(password_length, deduct_symbols, letters, digits, specialchar, extra_char))
+                elif action == '1':
+                    password_length = int(input("Length: "))
+                    action_list = input("Enter character types you want to use, separate with dots ((A)Alphabet.(D)Digits.(SC)Special Characters.(ALL)All): ").split(".")
+                    letters = string.ascii_letters if "A" in action_list else ''
+                    digits = string.digits if "D" in action_list else ''
+                    special_char = string.punctuation if "SC" in action_list else ''
+                    if "ALL" in action_list:
+                        letters, digits, specialchar = string.ascii_letters, string.digits, string.punctuation
+                    extra_char = input("Type in your extra Character/s, spaces are counted as Character/s too: ")
+                    deduct_symbols = input("Deduct Symbol(s): ")
+                    print(generate_password(password_length, deduct_symbols, letters, digits, special_char, extra_char))
+                elif action == '2':
+                    words = input("Sentence: ").split(' ')
+                    char_position, random_case, extra_char, num_length, special_chars_length = 'random', False, '', 0, 0
+                    word_chars = [(word[min(char_position, len(word) - 1)] if char_position != 'random' else random.choice(word)) for word in words]
+                    if random_case:
+                        word_chars = [char.lower() if random.random() < 0.5 else char.upper() for char in word_chars]
+                    num_string = ''.join(random.choices(string.digits, k=num_length))
+                    special_chars_string = ''.join(random.choices(string.punctuation, k=special_chars_length))
+                    print(''.join(word_chars) + extra_char + num_string + special_chars_string)
+                elif action == '3':
+                    break
+                else:
+                    print("Invalid choice. Please try again.")
         elif action == '1':
             while True:
                 action = input("1:Add New Password\n2:View Saved Passwords\n3:Update Existing Password\n4:Delete Password\n5:Back\n->")
-                if action == "1":
+                if action == '1':
                     account = input("Enter account name: ")
                     username = input("Enter username: ")
                     password = input("Enter password: ")
-                elif action == "2":
-                    view_passwords()
-                elif action == "3":
-                    update_password()
-                elif action == "4":
-                    delete_password()
-                elif action == "5":
+                    conn.execute("INSERT INTO passwords (ACCOUNT, USERNAME, PASSWORD) VALUES (?, ?, ?)", (account, username, password))
+                    conn.commit()
+                    print("Password added successfully!")
+                elif action == '2':
+                    cursor = conn.execute("SELECT * from passwords")
+                    print("{:<5} {:<15} {:<15} {:<15}".format("ID", "Account", "Username", "Password"))
+                    print("="*50)
+                    for row in cursor:
+                        print("{:<5} {:<15} {:<15} {:<15}".format(row[0], row[1], row[2], row[3]))
+                    print("="*50)
+                elif action == '3':
+                    password_id = input("Enter password ID to update: ")
+                    account = input("Enter new account name: ")
+                    username = input("Enter new username: ")
+                    password = input("Enter new password: ")
+                    conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", (account, username, password, password_id))
+                    conn.commit()
+                    print("Password updated successfully!")
+                elif action == '4':
+                    password_id = input("Enter password ID to delete: ")
+                    conn.execute("DELETE from passwords WHERE ID=?", (password_id,))
+                    conn.commit()
+                    print("Password deleted successfully!")
+                elif action == '5':
                     break
                 else:
                     print("Invalid choice. Please try again.")
         elif action == '2':
-            pass
+            while True:
+                action = input("0: Caeser Cipher\n1: Vigerene Cipher\n2: Back\n->")
+                if action == '0':
+                    intext = input("Cipher Text: ")
+                    shift = int(input("Shift Value: "))
+                    outtext = ""
+                    for i in range(len(intext)):
+                        temp = ord(intext[i]) + shift
+                        if temp > 122:
+                            temp_diff = temp - 122
+                            temp = 96 + temp_diff
+                        elif temp < 97:
+                            temp_diff = 97 - temp
+                            temp = 123 - temp_diff
+                        outtext += chr(temp)
+                        print("Ciphered Text: ", outtext)
+                elif action == '1':
+                    intext = input("Cipher Text: ")
+                    keyword = input("Keyword: ")
+                    encrypt = input("Encrypt: ")
+                    key = list(keyword)
+                    if len(intext) == len(key):
+                        key = key
+                    else:
+                        for i in range(len(intext) - len(key)):
+                            key.append(key[i % len(key)])
+                    key = "".join(key)
+                    if encrypt=="True":
+                        outtext = []
+                        for i in range(len(intext)):
+                            x = (ord(intext[i]) + ord(key[i])) % 26
+                            x += ord('A')
+                            outtext.append(chr(x))
+                        outtext = "".join(outtext)
+                    elif encrypt=="False":
+                        outtext = []
+                        for i in range(len(intext)):
+                            x = (ord(intext[i]) - ord(key[i]) + 26) % 26
+                            x += ord('A')
+                            outtext.append(chr(x))
+                        outtext = "".join(outtext)
+                    else:
+                        outtext = ""
+                        print("Encrypt can only be True or False")
+                elif action == '2':
+                    break
+                else:
+                    print("Invalid choice. Please try again.")
         elif action == '3':
-            pass
+            while True:
+                action = input("0: Always Clear Screen\n1: Info\n->")
+                if action == '0':
+                    if acs:
+                        acs = False
+                        print("ACS set to", acs)
+                    else:
+                        acs = True
+                        print("ACS set to", acs)
+                elif action == '1':
+                    print("This is Gen3Pass TextV1, this version always auto locks the database and auto saves settings, so please exit with the exit option.")
+                else:
+                    print("Invalid choice. Please try again.")
+        elif action == '4':
+            # Encrypt data
+            sys.exit()
         else:
             print("Invalid choice. Please try again.")
     main()
-
-    IV_ACCOUNT, IV_USERNAME, IV_PASSWORD = 0, 0, 0
-    conn.execute("INSERT INTO passwords (ACCOUNT, USERNAME, PASSWORD, IV_ACCOUNT, IV_USERNAME, IV_PASSWORD) VALUES (?, ?, ?, ?, ?, ?)", (account, username, password, IV_ACCOUNT, IV_USERNAME, IV_PASSWORD))
-    conn.commit()
-    print("Password added successfully!")
 
 def resource_path(filename):
     if hasattr(sys, '_MEIPASS'):
@@ -86,30 +154,37 @@ def resource_path(filename):
     else:
         return os.path.join(os.path.abspath("."), filename)
 
-import sqlite3
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-from os import urandom
+def generate_password(length, deduct_symbols, letters, digits, special_char, extra_char):
+    characters = set(letters + digits + special_char + extra_char)
+    deduct_symbols_set = set(deduct_symbols)
+    filtered_characters = list(characters  - deduct_symbols_set)
+    if not filtered_characters:
+        print("Error: Filtered characters list is empty. Please adjust your inputs.")
+        return None
+    password_length = min(length, len(filtered_characters))
+    password = ''.join(random.choice(filtered_characters) for _ in range(length))
+    return password
 
-# Create a connection to the database
-conn = sqlite3.connect('passwords.db')
-
-# Create the table if it doesn't exist
-conn.execute('''CREATE TABLE IF NOT EXISTS passwords
-             (ID INTEGER PRIMARY KEY AUTOINCREMENT,
-             ACCOUNT BLOB NOT NULL,
-             USERNAME BLOB NOT NULL,
-             PASSWORD BLOB NOT NULL);''')
+def get_mp():
+    while True:
+        mp = getpass("Master Password: ")
+        if mp == getpass("Re-enter: ") and mp != '':
+            salt = get_random_bytes(32)
+            break
+    hashed_mp = SHA256.new(mp.encode('utf-8')).hexdigest()
+    key = HKDF(mp, 32, salt, SHA256)
+    return hashed_mp, salt, key
 
 def encrypt_data(key, data):
-    chacha = ChaCha20Poly1305(key)
-    nonce = urandom(12)
-    ciphertext = chacha.encrypt(nonce, data, None)
-    return nonce + ciphertext
+    chacha = ChaCha20_Poly1305.new(key=key)
+    nonce = get_random_bytes(12)
+    ciphertext, tag = chacha.encrypt_and_digest(data, nonce)
+    return nonce + ciphertext + tag
 
 def decrypt_data(key, data):
-    chacha = ChaCha20Poly1305(key)
-    nonce, ciphertext = data[:12], data[12:]
-    plaintext = chacha.decrypt(nonce, ciphertext, None)
+    chacha = ChaCha20_Poly1305.new(key=key)
+    nonce, ciphertext, tag = data[:12], data[12:-16], data[-16:]
+    plaintext = chacha.decrypt_and_verify(ciphertext, nonce, tag)
     return plaintext
 
 def encrypt_all_data(key):
@@ -132,27 +207,55 @@ def decrypt_all_data(key):
         conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", (decrypted_account, decrypted_username, decrypted_password, row[0]))
         conn.commit()
 
-# Replace this with your actual 256-bit key
-key = urandom(32)
+def settings(db_element, id, value, update=False):
+    if update:
+        db_element.execute('UPDATE settings SET VALUE=? WHERE ID=?', (value, id))
+        conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", (account, username, password, password_id))
+    cursor.execute("SELECT id, value FROM settings")
+    rows = cursor.fetchall()
+    settings = {row[0]: row[1] for row in rows}
+    acs = settings.get(1)
+    return acs
 
-# Encrypt all data in the database
-encrypt_all_data(key)
+if __name__ == "__main__":
+    db_file = resource_path("passwords.db")
+    try:
+        if not os.path.exists(db_file) or os.path.getsize(db_file) == 0:
+            conn = sqlite3.connect(db_file)
+            conn.execute('''CREATE TABLE IF NOT EXISTS passwords
+                            (ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            ACCOUNT BLOB NOT NULL,
+                            USERNAME BLOB NOT NULL,
+                            PASSWORD BLOB NOT NULL);''')
+            conn.execute('INSERT INTO passwords (ACCOUNT, USERNAME, PASSWORD) VALUES (?, ?, ?)', ("Example", "Example", "Example"))
+            conn.execute('''CREATE TABLE IF NOT EXISTS settings
+                            (ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            VALUE BLOB NOT NULL);''')
+            conn.execute('INSERT INTO settings (VALUE) VALUES (?)', ("False",))
+            conn.execute('''CREATE TABLE IF NOT EXISTS secrets
+                            (HASHED_MP NOT NULL,
+                            SALT NOT NULL);''')
+            hashed_mp, salt, key = get_mp()
+            conn.execute('INSERT INTO secrets (HASHED_MP, SALT) VALUES (?,?)', (hashed_mp, salt))
+            conn.commit()
+            print("New Database created")
+            encrypt_all_data(key)
+            print("Database successfully encrypted")
+        else:
+            print("Database Check complete")
+            conn = sqlite3.connect(db_file)
+    except Exception as e:
+        print("Error: ", e)
+    finally:
+        cursor = conn.cursor()
 
-# Decrypt all data in the database
-decrypt_all_data(key)
-
-# Close the connection to the database
-conn.close()
-
-def generate_password(length, deduct_symbols, letters, digits, special_char, extra_char):
-    characters = set(letters + digits + special_char + specharacters)
-    deduct_symbols_set = set(deduct_symbols)
-    filtered_characters = list(characters  - deduct_symbols_set)
-    if not filtered_characters:
-        print("Error: Filtered characters list is empty. Please adjust your inputs.")
-        return None
-    password_length = min(length, len(filtered_characters))
-    password = ''.join(random.choice(filtered_characters) for _ in range(length))
-    return password
-
-main()
+        cursor.execute("SELECT hashed_mp, salt FROM settings")
+        hashed_mp, salt = cursor.fetchone()
+        hashed_mp, salt, key = get_mp()
+        conn.execute('UPDATE secrets (HASHED_MP, SALT) VALUES (?, ?)', (hashed_mp, salt))
+        decrypt_all_data(key)
+        print("█▀▀ █▀▀ █▄░█ █▀█ ▄▀█ █▀ █▀   ▀█▀ █▀▀ ▀▄▀ ▀█▀ █░█ ▄█")
+        print("█▄█ ██▄ █░▀█ █▀▀ █▀█ ▄█ ▄█   ░█░ ██▄ █░█ ░█░ ▀▄▀ ░█")
+        print("Gen3Pass TextV1 v.3.0.0.0 Created by Adalfarus\n")
+        print("This is Gen3Pass TextV1, this version always auto locks the database and auto saves settings, so please exit with the exit option.")
+        main()

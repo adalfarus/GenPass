@@ -18,7 +18,7 @@ def main():
                 if action == '0':
                     password_length = int(input("Length: "))
                     extra_char = input("Type in your extra Character/s, spaces are counted as Character/s too: ")
-                    letters, digits, specialchar, deduct_symbols = '', '', ''
+                    letters, digits, specialchar, deduct_symbols = '', '', '', ''
                     print(generate_password(password_length, deduct_symbols, letters, digits, specialchar, extra_char))
                 elif action == '1':
                     password_length = int(input("Length: "))
@@ -82,7 +82,7 @@ def main():
             while True:
                 action = input("0: Caeser Cipher\n1: Vigerene Cipher\n2: Back\n->")
                 if action == '0':
-                    intext = input("Cipher Text: ")
+                    intext = ''.join(input("CCipher Text: ").split()).lower()
                     shift = int(input("Shift Value: "))
                     outtext = ""
                     for i in range(len(intext)):
@@ -94,42 +94,34 @@ def main():
                             temp_diff = 97 - temp
                             temp = 123 - temp_diff
                         outtext += chr(temp)
-                        print("Ciphered Text: ", outtext)
+                    print("CCiphered Text: ", outtext)
                 elif action == '1':
-                    intext = input("Cipher Text: ")
+                    intext = input("VCipher Text: ")
                     keyword = input("Keyword: ")
-                    encrypt = input("Encrypt: ")
-                    key = list(keyword)
-                    if len(intext) == len(key):
-                        key = key
-                    else:
-                        for i in range(len(intext) - len(key)):
-                            key.append(key[i % len(key)])
-                    key = "".join(key)
-                    if encrypt=="True":
-                        outtext = []
-                        for i in range(len(intext)):
-                            x = (ord(intext[i]) + ord(key[i])) % 26
-                            x += ord('A')
-                            outtext.append(chr(x))
-                        outtext = "".join(outtext)
-                    elif encrypt=="False":
-                        outtext = []
-                        for i in range(len(intext)):
-                            x = (ord(intext[i]) - ord(key[i]) + 26) % 26
-                            x += ord('A')
-                            outtext.append(chr(x))
-                        outtext = "".join(outtext)
-                    else:
-                        outtext = ""
-                        print("Encrypt can only be True or False")
+                    encrypt = input("Encrypt: ").lower()
+                    key = (keyword * ((len(intext) // len(keyword)) + 1))[:len(intext)]
+                    outtext = ""
+                    for i in range(len(intext)):
+                        if intext[i].isalpha():
+                            shift = ord(key[i])
+                            if encrypt == "true":
+                                x = (ord(intext[i]) + shift % 26)
+                            elif encrypt == "false":
+                                x = (ord(intext[i]) - shift % 26)
+                            else:
+                                print("Encrypt can only be True or False")
+                                return
+                            outtext += chr(x)
+                        else:
+                            outtext += intext[i]
+                    print("VCiphered Text: ", outtext)
                 elif action == '2':
                     break
                 else:
                     print("Invalid choice. Please try again.")
         elif action == '3':
             while True:
-                action = input("0: Always Clear Screen\n1: Info\n->")
+                action = input("0: Always Clear Screen\n1: Info\n2: Back\n->")
                 if action == '0':
                     if acs:
                         acs = False
@@ -139,10 +131,15 @@ def main():
                         print("ACS set to", acs)
                 elif action == '1':
                     print("This is Gen3Pass TextV1, this version always auto locks the database and auto saves settings, so please exit with the exit option.")
+                elif action == '2':
+                    break
                 else:
                     print("Invalid choice. Please try again.")
         elif action == '4':
-            # Encrypt data
+            hashed_mp, salt, key = get_mp()
+            encrypt_all_data(key)
+            conn.execute('UPDATE secrets (HASHED_MP, SALT) VALUES (?, ?)', (hashed_mp, salt))
+            conn.close()
             sys.exit()
         else:
             print("Invalid choice. Please try again.")
@@ -227,7 +224,6 @@ if __name__ == "__main__":
                             ACCOUNT BLOB NOT NULL,
                             USERNAME BLOB NOT NULL,
                             PASSWORD BLOB NOT NULL);''')
-            conn.execute('INSERT INTO passwords (ACCOUNT, USERNAME, PASSWORD) VALUES (?, ?, ?)', ("Example", "Example", "Example"))
             conn.execute('''CREATE TABLE IF NOT EXISTS settings
                             (ID INTEGER PRIMARY KEY AUTOINCREMENT,
                             VALUE BLOB NOT NULL);''')
@@ -235,25 +231,29 @@ if __name__ == "__main__":
             conn.execute('''CREATE TABLE IF NOT EXISTS secrets
                             (HASHED_MP NOT NULL,
                             SALT NOT NULL);''')
-            hashed_mp, salt, key = get_mp()
-            conn.execute('INSERT INTO secrets (HASHED_MP, SALT) VALUES (?,?)', (hashed_mp, salt))
+            conn.execute('INSERT INTO passwords (ACCOUNT, USERNAME, PASSWORD) VALUES (?, ?, ?)', ("Example", "Example", "Example"))
+            conn.execute('INSERT INTO secrets (HASHED_MP, SALT) VALUES (?,?)', ('', ''))
             conn.commit()
             print("New Database created")
-            encrypt_all_data(key)
-            print("Database successfully encrypted")
         else:
             print("Database Check complete")
             conn = sqlite3.connect(db_file)
+            cursor = conn.cursor()
+            cursor.execute("SELECT hashed_mp, salt FROM settings")
+            hashed_mp, salt = cursor.fetchone()
+            while True:
+                mp = get_mp()
+                if mp == hashed_mp:
+                    salt, key = get_mp()
+                    decrypt_all_data(key)
+                    break
+                else:
+                    print("Invalid Key")
+            conn.execute('UPDATE secrets (HASHED_MP, SALT) VALUES (?, ?)', (hashed_mp, salt))
     except Exception as e:
         print("Error: ", e)
     finally:
-        cursor = conn.cursor()
 
-        cursor.execute("SELECT hashed_mp, salt FROM settings")
-        hashed_mp, salt = cursor.fetchone()
-        hashed_mp, salt, key = get_mp()
-        conn.execute('UPDATE secrets (HASHED_MP, SALT) VALUES (?, ?)', (hashed_mp, salt))
-        decrypt_all_data(key)
         print("█▀▀ █▀▀ █▄░█ █▀█ ▄▀█ █▀ █▀   ▀█▀ █▀▀ ▀▄▀ ▀█▀ █░█ ▄█")
         print("█▄█ ██▄ █░▀█ █▀▀ █▀█ ▄█ ▄█   ░█░ ██▄ █░█ ░█░ ▀▄▀ ░█")
         print("Gen3Pass TextV1 v.3.0.0.0 Created by Adalfarus\n")

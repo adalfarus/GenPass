@@ -1,19 +1,49 @@
-﻿from Crypto.Protocol.KDF import HKDF
+﻿import os
+import sys
+import time
+import random
+import string
+import sqlite3
+import base64
+from getpass import getpass
+from Crypto.Protocol.KDF import HKDF
 from Crypto.Hash import SHA256
 from Crypto.Cipher import ChaCha20_Poly1305
 from Crypto.Random import get_random_bytes
-from getpass import getpass
-import random
-import string
-import base64
-import sqlite3
-import sys
-import os
 
-def main():
+
+class Settings:
+    def __init__(self, conn):
+        self.conn = conn
+        self.cursor = conn.cursor()
+        self._load_settings()
+
+    def _load_settings(self):
+        self.cursor.execute("SELECT id, value FROM settings")
+        rows = self.cursor.fetchall()
+        self.settings = {row[0]: row[1] for row in rows}
+
+    def get_setting(self, setting_id):
+        return self.settings.get(setting_id)
+
+    def update_setting(self, setting_id, value):
+        self.conn.execute('UPDATE settings SET VALUE=? WHERE ID=?', (value, setting_id))
+        self.conn.commit()
+        self._load_settings()
+
+    def clear_screen(self):
+        acs = self.get_setting(1)
+        if acs == "True":
+            time.sleep(0.5)
+            os.system('clear')
+            os.system('cls')
+
+def main(settings):
     while True:
+        app_settings.clear_screen()
         action = input("0:Password Generation\n1:Password Manager\n2:Crypt\n3:Settings & Info\n4:Exit\n->")
         if action == '0':
+            app_settings.clear_screen()
             while True:
                 action = input("0: Choose own Characters\n1: Choose Character Types\n2: With a sentence\n3: Back\n->")
                 if action == '0':
@@ -45,7 +75,9 @@ def main():
                     break
                 else:
                     print("Invalid choice. Please try again.")
+                app_settings.clear_screen()
         elif action == '1':
+            app_settings.clear_screen()
             while True:
                 action = input("1:Add New Password\n2:View Saved Passwords\n3:Update Existing Password\n4:Delete Password\n5:Back\n->")
                 if action == '1':
@@ -79,7 +111,9 @@ def main():
                     break
                 else:
                     print("Invalid choice. Please try again.")
+                app_settings.clear_screen()
         elif action == '2':
+            app_settings.clear_screen()
             while True:
                 action = input("0: Caeser Cipher\n1: Vigerene Cipher\n2: Back\n->")
                 if action == '0':
@@ -120,32 +154,37 @@ def main():
                     break
                 else:
                     print("Invalid choice. Please try again.")
+                app_settings.clear_screen()
         elif action == '3':
+            app_settings.clear_screen()
             while True:
-                action = input("0: Always Clear Screen\n1: Info\n2: Back\n->")
+                action = input("0: Toggle Always Clear Screen\n1: Info\n2: Back\n->")
                 if action == '0':
-                    if acs:
-                        acs = False
-                        print("ACS set to", acs)
+                    acs = app_settings.get_setting(1)
+                    if acs == "True":
+                        app_settings.update_setting(1, "False")
+                        print("ACS set to False")
                     else:
-                        acs = True
-                        print("ACS set to", acs)
+                        app_settings.update_setting(1, "True")
+                        print("ACS set to True")
                 elif action == '1':
                     print("This is Gen3Pass TextV1, this version always auto locks the database and auto saves settings, so please exit with the exit option.")
                 elif action == '2':
                     break
                 else:
                     print("Invalid choice. Please try again.")
+                app_settings.clear_screen()
         elif action == '4':
-            hashed_mp, salt, key = get_mp(base64.b64encode(get_random_bytes(32)).decode('utf-8'))
+            app_settings.clear_screen()
+            hashed_mp, salt, key = get_mp("Setup", base64.b64encode(get_random_bytes(32)).decode('utf-8'))
             encrypt_all_data(key)
             conn.execute(f"UPDATE secrets SET hashed_mp = '{hashed_mp}', salt = '{salt}'")
             conn.commit()
             conn.close()
+            app_settings.clear_screen()
             sys.exit()
         else:
             print("Invalid choice. Please try again.")
-    main()
 
 def resource_path(filename):
     if hasattr(sys, '_MEIPASS'):
@@ -164,14 +203,17 @@ def generate_password(length, deduct_symbols, letters, digits, special_char, ext
     password = ''.join(random.choice(filtered_characters) for _ in range(length))
     return password
 
-def get_mp(salt):
-    while True:
-        mp = getpass("Master Password: ")
-        if mp == getpass("Re-enter: ") and mp != '':
-            # salt = base64.b64encode(get_random_bytes(32)).decode('utf-8')
-            break
-    hashed_mp = SHA256.new(mp.encode('utf-8')).hexdigest()
-    key = HKDF(mp.encode(), 32, salt.encode(), SHA256)
+def get_mp(hashed_mp, salt):
+    if hashed_mp != '' or hashed_mp == "Setup":
+        while True:
+            mp = getpass("Master Password: ")
+            if mp == getpass("Re-enter: ") and mp != '':
+                # salt = base64.b64encode(get_random_bytes(32)).decode('utf-8')
+                break
+        hashed_mp = SHA256.new(mp.encode('utf-8')).hexdigest()
+        key = HKDF(mp.encode(), 32, salt.encode(), SHA256)
+    else:
+        return '', '', ''
     return hashed_mp, salt, key
 
 def encrypt_data(key, data):
@@ -246,21 +288,22 @@ if __name__ == "__main__":
             cursor.execute("SELECT hashed_mp, salt FROM secrets")
             hashed_mp, salt = cursor.fetchone()
             while True:
-                mp, salt, key = get_mp(salt)
+                mp, salt, key = get_mp(hashed_mp, salt)
                 if mp == hashed_mp:
                     decrypt_all_data(key)
-                    break
-                elif hashed_mp == '':
+                    hashed_mp, salt = '', ''
                     break
                 else:
                     print("Invalid Key")
             conn.execute(f"UPDATE secrets SET hashed_mp = '{hashed_mp}', salt = '{salt}'")
+            conn.commit()
     except Exception as e:
         print("Error: ", e)
     finally:
-
+        app_settings = Settings(conn)
         print("█▀▀ █▀▀ █▄░█ █▀█ ▄▀█ █▀ █▀   ▀█▀ █▀▀ ▀▄▀ ▀█▀ █░█ ▄█")
         print("█▄█ ██▄ █░▀█ █▀▀ █▀█ ▄█ ▄█   ░█░ ██▄ █░█ ░█░ ▀▄▀ ░█")
         print("Gen3Pass TextV1 v.3.0.0.0 Created by Adalfarus\n")
         print("This is Gen3Pass TextV1, this version always auto locks the database and auto saves settings, so please exit with the exit option.")
-        main()
+        time.sleep(0) if app_settings.get_setting(1) != "True" else time.sleep(2)
+        main(app_settings)

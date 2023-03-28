@@ -5,6 +5,7 @@ from Crypto.Random import get_random_bytes
 from getpass import getpass
 import random
 import string
+import base64
 import sqlite3
 import sys
 import os
@@ -136,9 +137,10 @@ def main():
                 else:
                     print("Invalid choice. Please try again.")
         elif action == '4':
-            hashed_mp, salt, key = get_mp()
+            hashed_mp, salt, key = get_mp(base64.b64encode(get_random_bytes(32)).decode('utf-8'))
             encrypt_all_data(key)
-            conn.execute('UPDATE secrets (HASHED_MP, SALT) VALUES (?, ?)', (hashed_mp, salt))
+            conn.execute(f"UPDATE secrets SET hashed_mp = '{hashed_mp}', salt = '{salt}'")
+            conn.commit()
             conn.close()
             sys.exit()
         else:
@@ -162,27 +164,27 @@ def generate_password(length, deduct_symbols, letters, digits, special_char, ext
     password = ''.join(random.choice(filtered_characters) for _ in range(length))
     return password
 
-def get_mp():
+def get_mp(salt):
     while True:
         mp = getpass("Master Password: ")
         if mp == getpass("Re-enter: ") and mp != '':
-            salt = get_random_bytes(32)
+            # salt = base64.b64encode(get_random_bytes(32)).decode('utf-8')
             break
     hashed_mp = SHA256.new(mp.encode('utf-8')).hexdigest()
-    key = HKDF(mp, 32, salt, SHA256)
+    key = HKDF(mp.encode(), 32, salt.encode(), SHA256)
     return hashed_mp, salt, key
 
 def encrypt_data(key, data):
     chacha = ChaCha20_Poly1305.new(key=key)
-    nonce = get_random_bytes(12)
-    ciphertext, tag = chacha.encrypt_and_digest(data, nonce)
+    nonce = chacha.nonce  # Use the generated nonce from the cipher object
+    ciphertext, tag = chacha.encrypt_and_digest(data.encode())
     return nonce + ciphertext + tag
 
 def decrypt_data(key, data):
-    chacha = ChaCha20_Poly1305.new(key=key)
     nonce, ciphertext, tag = data[:12], data[12:-16], data[-16:]
-    plaintext = chacha.decrypt_and_verify(ciphertext, nonce, tag)
-    return plaintext
+    chacha = ChaCha20_Poly1305.new(key=key, nonce=nonce)
+    plaintext = chacha.decrypt_and_verify(ciphertext, tag)
+    return plaintext.decode()
 
 def encrypt_all_data(key):
     cursor = conn.execute("SELECT ID, ACCOUNT, USERNAME, PASSWORD FROM passwords")
@@ -191,7 +193,8 @@ def encrypt_all_data(key):
         encrypted_username = encrypt_data(key, row[2])
         encrypted_password = encrypt_data(key, row[3])
 
-        conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", (encrypted_account, encrypted_username, encrypted_password, row[0]))
+        conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", 
+                     (encrypted_account, encrypted_username, encrypted_password, row[0]))
         conn.commit()
 
 def decrypt_all_data(key):
@@ -201,7 +204,8 @@ def decrypt_all_data(key):
         decrypted_username = decrypt_data(key, row[2])
         decrypted_password = decrypt_data(key, row[3])
 
-        conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", (decrypted_account, decrypted_username, decrypted_password, row[0]))
+        conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", 
+                     (decrypted_account, decrypted_username, decrypted_password, row[0]))
         conn.commit()
 
 def settings(db_element, id, value, update=False):
@@ -239,17 +243,18 @@ if __name__ == "__main__":
             print("Database Check complete")
             conn = sqlite3.connect(db_file)
             cursor = conn.cursor()
-            cursor.execute("SELECT hashed_mp, salt FROM settings")
+            cursor.execute("SELECT hashed_mp, salt FROM secrets")
             hashed_mp, salt = cursor.fetchone()
             while True:
-                mp = get_mp()
+                mp, salt, key = get_mp(salt)
                 if mp == hashed_mp:
-                    salt, key = get_mp()
                     decrypt_all_data(key)
+                    break
+                elif hashed_mp == '':
                     break
                 else:
                     print("Invalid Key")
-            conn.execute('UPDATE secrets (HASHED_MP, SALT) VALUES (?, ?)', (hashed_mp, salt))
+            conn.execute(f"UPDATE secrets SET hashed_mp = '{hashed_mp}', salt = '{salt}'")
     except Exception as e:
         print("Error: ", e)
     finally:

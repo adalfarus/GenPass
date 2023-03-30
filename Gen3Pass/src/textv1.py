@@ -49,8 +49,8 @@ def main(settings):
                 if action == '0':
                     password_length = int(input("Length: "))
                     extra_char = input("Type in your extra Character/s, spaces are counted as Character/s too: ")
-                    letters, digits, specialchar, deduct_symbols = '', '', '', ''
-                    print(generate_password(password_length, deduct_symbols, letters, digits, specialchar, extra_char))
+                    letters, digits, special_char, deduct_symbols = '', '', '', ''
+                    print(generate_password(password_length, deduct_symbols, letters, digits, special_char, extra_char))
                 elif action == '1':
                     password_length = int(input("Length: "))
                     action_list = input("Enter character types you want to use, separate with dots ((A)Alphabet.(D)Digits.(SC)Special Characters.(ALL)All): ").split(".")
@@ -58,7 +58,7 @@ def main(settings):
                     digits = string.digits if "D" in action_list else ''
                     special_char = string.punctuation if "SC" in action_list else ''
                     if "ALL" in action_list:
-                        letters, digits, specialchar = string.ascii_letters, string.digits, string.punctuation
+                        letters, digits, special_char = string.ascii_letters, string.digits, string.punctuation
                     extra_char = input("Type in your extra Character/s, spaces are counted as Character/s too: ")
                     deduct_symbols = input("Deduct Symbol(s): ")
                     print(generate_password(password_length, deduct_symbols, letters, digits, special_char, extra_char))
@@ -200,7 +200,11 @@ def generate_password(length, deduct_symbols, letters, digits, special_char, ext
         print("Error: Filtered characters list is empty. Please adjust your inputs.")
         return None
     password_length = min(length, len(filtered_characters))
-    password = ''.join(random.choice(filtered_characters) for _ in range(length))
+#    for _ in range(length):
+#        password = ''.join(random.choice(filtered_characters))
+#        print(password, sep=' ', end='', flush=True)
+#        password = ''
+    password = ''.join(random.choice(filtered_characters) for _ in range(length)) 
     return password
 
 def get_mp(hashed_mp, salt):
@@ -249,16 +253,6 @@ def decrypt_all_data(key):
         conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", 
                      (decrypted_account, decrypted_username, decrypted_password, row[0]))
         conn.commit()
-
-def settings(db_element, id, value, update=False):
-    if update:
-        db_element.execute('UPDATE settings SET VALUE=? WHERE ID=?', (value, id))
-        conn.execute("UPDATE passwords SET ACCOUNT=?, USERNAME=?, PASSWORD=? WHERE ID=?", (account, username, password, password_id))
-    cursor.execute("SELECT id, value FROM settings")
-    rows = cursor.fetchall()
-    settings = {row[0]: row[1] for row in rows}
-    acs = settings.get(1)
-    return acs
 
 if __name__ == "__main__":
     db_file = resource_path("passwords.db")

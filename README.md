@@ -5,7 +5,7 @@ db where the user chose.
 
 Sincerely Cariel
 
-Locations:
+Script/Exe Locations:
 
 Gen1Pass -> ./gen1pass.py
 
